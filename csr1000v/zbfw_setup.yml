@@ -1,0 +1,71 @@
+---
+- hosts: cisco
+  gather_facts: no
+  connection: local
+
+  vars:
+    cli:
+      host: "{{ inventory_hostname }}"
+      username: "{{ ansible_ssh_user }}"
+      password: "{{ ansible_ssh_password }}"
+      authorize: true
+      auth_pass: "{{ cisco_enable_password }}"
+
+    class_map_name: ALL_PROTOCOLS
+    policy_map_name: POLICY_INSIDE_TO_OUTSIDE
+    outside_zone_name: OUTSIDE
+    inside_zone_name: INSIDE
+    zone_pair_name: INSIDE_TO_OUTSIDE
+    inside_interface_name: GigabitEthernet3
+    outside_interface_name: GigabitEthernet2
+
+  tasks:
+    - name: setup class map
+      ios_config:
+        parents:
+          - class-map type inspect match-any {{ class_map_name }}
+        lines:
+          - match protocol {{ item }}
+        provider: "{{ cli }}"
+      with_items:
+        - tcp
+        - udp
+        - icmp
+
+    - name: setup policy map
+      ios_config:
+        parents:
+          - policy-map type inspect {{ policy_map_name }}
+          - class type inspect {{ class_map_name }}
+        lines:
+          - inspect
+        provider: "{{ cli }}"
+
+    - name: setup zone
+      ios_config:
+        lines:
+          - zone security {{ item }}
+        provider: "{{ cli }}"
+      with_items:
+        - "{{ outside_zone_name }}"
+        - "{{ inside_zone_name }}"
+
+    - name: setup zone pair
+      ios_config:
+        parents:
+          - zone-pair security {{ zone_pair_name }} source {{ inside_zone_name }} destination {{ outside_zone_name }}
+        lines:
+          - service-policy type inspect {{ policy_map_name }}
+        provider: "{{ cli }}"
+
+    - name: setup interface 
+      ios_config:
+        parents:
+          - interface {{ item.interface }}
+        lines:
+          - zone-member security {{ item.zone }}
+        provider: "{{ cli }}"
+      with_items:
+        - {interface: "{{ outside_interface_name }}", zone: "{{ outside_zone_name }}"}
+        - {interface: "{{ inside_interface_name }}", zone: "{{ inside_zone_name }}"}
+

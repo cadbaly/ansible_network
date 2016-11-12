@@ -1,0 +1,71 @@
+---
+- hosts: cisco
+  gather_facts: no
+  connection: local
+
+  vars:
+    cli:
+      host: "{{ inventory_hostname }}"
+      username: "{{ ansible_ssh_user }}"
+      password: "{{ ansible_ssh_password }}"
+      authorize: true
+      auth_pass: "{{ cisco_enable_password }}"
+
+    class_map_name: ALL_PROTOCOLS
+    policy_map_name: POLICY_INSIDE_TO_OUTSIDE
+    outside_zone_name: OUTSIDE
+    inside_zone_name: INSIDE
+    zone_pair_name: INSIDE_TO_OUTSIDE
+    inside_interface_name: GigabitEthernet3
+    outside_interface_name: GigabitEthernet2
+
+  tasks:
+    - name: get config
+      ios_command:
+        commands:
+          - show running-config
+        provider: "{{ cli }}"
+      register: config
+
+    - name: delete interface zone
+      ios_config:
+        parents:
+          - interface {{ item.interface }}
+        lines:
+          - no zone-member security {{ item.zone }}
+        provider: "{{ cli }}"
+      when: config.stdout[0].find("zone-member security {{ item.zone }}") != -1
+      with_items:
+        - {interface: "{{ outside_interface_name }}", zone: "{{ outside_zone_name }}"}
+        - {interface: "{{ inside_interface_name }}", zone: "{{ inside_zone_name }}"}
+
+    - name: delete zone pair
+      ios_config:
+        lines:
+          - no zone-pair security {{ zone_pair_name }} source {{ inside_zone_name }} destination {{ outside_zone_name }}
+        provider: "{{ cli }}"
+      when: config.stdout[0].find("zone-pair security {{ zone_pair_name }}") != -1
+
+    - name: delete zone
+      ios_config:
+        lines:
+          - no zone security {{ item }}
+        provider: "{{ cli }}"
+      when: config.stdout[0].find("zone security {{ item }}") != -1
+      with_items:
+        - "{{ outside_zone_name }}"
+        - "{{ inside_zone_name }}"
+
+    - name: delete policy map
+      ios_config:
+        lines:
+          - no policy-map type inspect {{ policy_map_name }}
+        provider: "{{ cli }}"
+      when: config.stdout[0].find("policy-map type inspect {{ policy_map_name }}") != -1
+
+    - name: delete class map
+      ios_config:
+        lines:
+          - no class-map type inspect match-any {{ class_map_name }}
+        provider: "{{ cli }}"
+      when: config.stdout[0].find("class-map type inspect match-any {{ class_map_name }}") != -1
