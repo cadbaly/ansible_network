@@ -12,14 +12,9 @@
       auth_pass: "{{ cisco_enable_password }}"
 
     loopback_if_name: Loopback9
-    loopback_if_ipaddr: 9.9.9.9
-    erspan_id: 99
     mon_src_session_num: 11
     mon_dst_session_num: 12
     mon_src_if_name: GigabitEthernet3
-    mon_src_if_name_short: Gi3
-    mon_dst_if_name_short: Gi1
-    mon_if_vlan: true
 
   tasks:
     - name: get config
