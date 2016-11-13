@@ -1,0 +1,74 @@
+---
+- hosts: cisco
+  gather_facts: no
+  connection: local
+
+  vars:
+    cli:
+      host: "{{ inventory_hostname }}"
+      username: "{{ ansible_ssh_user }}"
+      password: "{{ ansible_ssh_password }}"
+      authorize: true
+      auth_pass: "{{ cisco_enable_password }}"
+
+    loopback_if_name: Loopback9
+    loopback_if_ipaddr: 9.9.9.9
+    erspan_id: 99
+    mon_src_session_num: 11
+    mon_dst_session_num: 12
+    mon_src_if_name: GigabitEthernet3
+    mon_src_if_name_short: Gi3
+    mon_dst_if_name_short: Gi1
+    mon_if_vlan: true
+
+  tasks:
+    - name: setup loopback interface 
+      ios_config:
+        parents:
+          - interface {{ loopback_if_name }}
+        lines:
+          - ip address {{ loopback_if_ipaddr }} 255.255.255.255
+        provider: "{{ cli }}"
+
+    - name: setup local erspaa (1) 
+      ios_config:
+        parents:
+          - monitor session {{ item.session }} type erspan-{{ item.erspan }}
+        lines:
+          - "{{ item.erspan }} interface {{ item.if }}"
+        after:
+          - no shutdown
+        provider: "{{ cli }}"
+      with_items:
+        - {session: "{{ mon_src_session_num }}", erspan: source, if: "{{ mon_src_if_name_short }}"}
+        - {session: "{{ mon_dst_session_num }}", erspan: destination, if: "{{ mon_dst_if_name_short }}"}
+
+    - name: setup local erspan (2)
+      ios_config:
+        parents:
+          - monitor session {{ mon_src_session_num }} type erspan-source
+          - destination
+        lines:
+          - erspan-id {{ erspan_id }}
+          - ip address {{ loopback_if_ipaddr }}
+          - origin ip address {{ loopback_if_ipaddr }}
+        provider: "{{ cli }}"
+
+    - name: setup local erspan (3)
+      ios_config:
+        parents:
+          - monitor session {{ mon_dst_session_num }} type erspan-destination
+          - source
+        lines:
+          - erspan-id {{ erspan_id }}
+          - ip address {{ loopback_if_ipaddr }}
+        provider: "{{ cli }}"
+
+    - name: setup monitor vlan if configured
+      ios_config:
+        parents:
+          - interface {{ mon_src_if_name }}
+        lines:
+          - plim ethernet vlan filter disable
+        provider: "{{ cli }}"
+      when: mon_if_vlan
