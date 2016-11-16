@@ -16,7 +16,7 @@
     erspan_id: 99
     mon_src_session_num: 11
     mon_dst_session_num: 12
-    mon_src_if_name: GigabitEthernet3
+    mon_dst_if_name: GigabitEthernet1
     mon_src_if_name_short: Gi3
     mon_dst_if_name_short: Gi1
     mon_if_vlan: true
@@ -67,7 +67,7 @@
     - name: setup monitor vlan if configured
       ios_config:
         parents:
-          - interface {{ mon_src_if_name }}
+          - interface {{ mon_dst_if_name }}
         lines:
           - plim ethernet vlan filter disable
         provider: "{{ cli }}"
